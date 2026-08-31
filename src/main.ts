@@ -18,7 +18,20 @@ async function bootstrap() {
 
   const globalPrefix = process.env.GLOBAL_PREFIX ?? 'api/v1';
   app.setGlobalPrefix(globalPrefix);
-  app.enableCors();
+
+  // Cấu hình CORS Whitelist từ biến môi trường CORS_ORIGIN
+  const corsOrigin = process.env.CORS_ORIGIN;
+  let allowedOrigins: boolean | string | string[] = true;
+  if (corsOrigin && corsOrigin.trim() !== '*') {
+    allowedOrigins = corsOrigin.split(',').map((o) => o.trim());
+  }
+
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type,Accept,Authorization',
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
