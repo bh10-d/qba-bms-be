@@ -130,9 +130,25 @@ export class SeedService {
         'admin@qbabms.com',
         'manager@qbabms.com',
         'staff@qbabms.com',
-        'user@qbabms.com',
       ],
     };
+  }
+
+  private getDumpPath(): string {
+    const candidatePaths = [
+      process.env.ODOO_DUMP_PATH,
+      path.join(process.cwd(), 'software', 'dump.sql'),
+      path.join(process.cwd(), 'uploads', 'dump.sql'),
+      path.join(process.cwd(), 'dump.sql'),
+    ].filter(Boolean) as string[];
+
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        this.logger.log(`--> [Dump File Found] Sử dụng tệp CSDL Odoo dump tại: ${p}`);
+        return p;
+      }
+    }
+    return path.join(process.cwd(), 'software', 'dump.sql');
   }
 
   private async seedRoles(): Promise<Record<string, Role>> {
@@ -181,7 +197,7 @@ export class SeedService {
 
   private async seedRealBrands(): Promise<Record<string, Brand>> {
     this.logger.log('--> Seeding Real Brands từ qba_brand (dump.sql)...');
-    const dumpPath = path.join(process.cwd(), 'software', 'dump.sql');
+    const dumpPath = this.getDumpPath();
     const brandsMap: Record<string, Brand> = {};
 
     const defaultBrandNames = [
@@ -234,7 +250,7 @@ export class SeedService {
 
   private async seedRealEngines(): Promise<Record<string, Engine>> {
     this.logger.log('--> Seeding ALL Real Engines từ qba_engine (dump.sql)...');
-    const dumpPath = path.join(process.cwd(), 'software', 'dump.sql');
+    const dumpPath = this.getDumpPath();
     const enginesMap: Record<string, Engine> = {};
 
     if (!fs.existsSync(dumpPath)) return enginesMap;
@@ -280,7 +296,7 @@ export class SeedService {
   // Nạp & Migrate TOÀN BỘ Hộp Số thực từ qba_gearbox trong dump.sql
   private async seedRealGearboxes(): Promise<Record<string, Gearbox>> {
     this.logger.log('--> Seeding ALL Real Gearboxes từ qba_gearbox (dump.sql)...');
-    const dumpPath = path.join(process.cwd(), 'software', 'dump.sql');
+    const dumpPath = this.getDumpPath();
     const gearboxesMap: Record<string, Gearbox> = {};
 
     if (!fs.existsSync(dumpPath)) return gearboxesMap;
@@ -324,7 +340,7 @@ export class SeedService {
 
   private async seedRealVehicles(enginesMap: Record<string, Engine>, gearboxesMap: Record<string, Gearbox>): Promise<Record<string, Vehicle>> {
     this.logger.log('--> Seeding ALL Real Vehicles từ qba_vehicle (dump.sql)...');
-    const dumpPath = path.join(process.cwd(), 'software', 'dump.sql');
+    const dumpPath = this.getDumpPath();
     const vehiclesMap: Record<string, Vehicle> = {};
 
     if (!fs.existsSync(dumpPath)) return vehiclesMap;
@@ -367,7 +383,7 @@ export class SeedService {
   // Nạp 100% Sản phẩm Phụ tùng thực từ product_template & product_product trong dump.sql
   private async seedRealProducts(brandsMap: Record<string, Brand>, vehiclesMap: Record<string, Vehicle>, enginesMap: Record<string, Engine>, gearboxesMap: Record<string, Gearbox>): Promise<Record<string, Product>> {
     this.logger.log('--> Seeding ALL Real Products (2,784 products) từ dump.sql...');
-    const dumpPath = path.join(process.cwd(), 'software', 'dump.sql');
+    const dumpPath = this.getDumpPath();
     const productsMap: Record<string, Product> = {};
 
     if (!fs.existsSync(dumpPath)) return productsMap;
@@ -498,7 +514,7 @@ export class SeedService {
   // Nạp & Migrate TOÀN BỘ Dữ Liệu Nhà Cung Cấp Phụ Tùng từ product_supplierinfo & res_partner trong dump.sql
   private async seedRealSupplierInfo(productsMap: Record<string, Product>) {
     this.logger.log('--> Seeding & Migrating ALL Odoo product_supplierinfo từ dump.sql...');
-    const dumpPath = path.join(process.cwd(), 'software', 'dump.sql');
+    const dumpPath = this.getDumpPath();
     if (!fs.existsSync(dumpPath)) return;
 
     // Pass 1: Parse res_partner & product_template
@@ -607,7 +623,7 @@ export class SeedService {
 
   private async seedOdooOrdersAndPurchases(productsMap: Record<string, Product>) {
     this.logger.log('--> Seeding ALL Odoo Purchase Orders (1,507 POs) & Sales Orders (185 SOs)...');
-    const dumpPath = path.join(process.cwd(), 'software', 'dump.sql');
+    const dumpPath = this.getDumpPath();
     if (!fs.existsSync(dumpPath)) return;
 
     let fileStream = fs.createReadStream(dumpPath);
@@ -838,7 +854,7 @@ export class SeedService {
 
   private async seedOdooAuditLogs() {
     this.logger.log('--> Seeding & Migrating ALL Odoo Chatter Audit Logs (28,179 records) từ dump.sql...');
-    const dumpPath = path.join(process.cwd(), 'software', 'dump.sql');
+    const dumpPath = this.getDumpPath();
     if (!fs.existsSync(dumpPath)) return;
 
     // Pass 1: Parse res_partner, mail_tracking_value, purchase_order, sale_order
@@ -960,7 +976,7 @@ export class SeedService {
 
   private async seedOdooStockPickings() {
     this.logger.log('--> Seeding ALL Odoo Stock Pickings (2,171 records)...');
-    const dumpPath = path.join(process.cwd(), 'software', 'dump.sql');
+    const dumpPath = this.getDumpPath();
     if (!fs.existsSync(dumpPath)) return;
 
     let fileStream = fs.createReadStream(dumpPath);
@@ -1035,7 +1051,7 @@ export class SeedService {
   // Nạp & Migrate TOÀN BỘ 5,684 Nhật Ký Biến Động Kho (stock_move) từ dump.sql (Đã liên kết 100% Sản Phẩm)
   private async seedOdooStockMoves(productsMap: Record<string, Product>) {
     this.logger.log('--> Seeding & Migrating ALL Odoo Stock Moves (5,684 records) từ dump.sql...');
-    const dumpPath = path.join(process.cwd(), 'software', 'dump.sql');
+    const dumpPath = this.getDumpPath();
     if (!fs.existsSync(dumpPath)) return;
 
     let fileStream = fs.createReadStream(dumpPath);
