@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  qba-bms-be:
+    image: qba-bms-be:1.0.0
+    container_name: qba-bms-be
+    restart: always
+    ports:
+      - "127.0.0.1:4000:3000"
+    volumes:
+      - uploads_data:/app/uploads
