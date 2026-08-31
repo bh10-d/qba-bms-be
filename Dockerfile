@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install dependencies first (for docker cache optimization)
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Copy source code and build
 COPY . .
@@ -20,7 +20,7 @@ ENV NODE_ENV=production
 
 # Copy package files and install production dependencies only
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copy built dist directory from builder
 COPY --from=builder /app/dist ./dist
