@@ -12,27 +12,33 @@ export class StorageService implements OnModuleInit {
   constructor(private readonly configService: ConfigService) {}
 
   async onModuleInit() {
-    const { Storage, LocalStorageDriver, MinIOStorageDriver } = await import('@bh10-d/storix');
-    const driverType = this.configService.get<string>('STORAGE_DRIVER', 'local');
+    try {
+      const dynamicImport = new Function('pkg', 'return import(pkg)');
+      const storix = await dynamicImport('@bh10-d/storix');
+      const { Storage, LocalStorageDriver, MinIOStorageDriver } = storix;
+      const driverType = this.configService.get<string>('STORAGE_DRIVER', 'local');
 
-    if (driverType === 'minio') {
-      this.logger.log('📦 Khởi tạo Storage Engine: MinIO Driver (@bh10-d/storix)...');
-      const driver = new MinIOStorageDriver({
-        endPoint: this.configService.get<string>('MINIO_ENDPOINT', 'localhost'),
-        port: this.configService.get<number>('MINIO_PORT', 9000),
-        useSSL: this.configService.get<boolean>('MINIO_USE_SSL', false),
-        accessKey: this.configService.get<string>('MINIO_ACCESS_KEY', 'minioadmin'),
-        secretKey: this.configService.get<string>('MINIO_SECRET_KEY', 'minioadmin'),
-        bucket: this.configService.get<string>('MINIO_BUCKET', 'qba-bms-filestore'),
-      });
-      this.storage = new Storage(driver);
-    } else {
-      const rootPath = path.join(process.cwd(), 'uploads');
-      this.logger.log(`📁 Khởi tạo Storage Engine: Local Filesystem Driver (@bh10-d/storix) tại [${rootPath}]...`);
-      const driver = new LocalStorageDriver({
-        root: rootPath,
-      });
-      this.storage = new Storage(driver);
+      if (driverType === 'minio') {
+        this.logger.log('📦 Khởi tạo Storage Engine: MinIO Driver (@bh10-d/storix)...');
+        const driver = new MinIOStorageDriver({
+          endPoint: this.configService.get<string>('MINIO_ENDPOINT', 'localhost'),
+          port: this.configService.get<number>('MINIO_PORT', 9000),
+          useSSL: this.configService.get<boolean>('MINIO_USE_SSL', false),
+          accessKey: this.configService.get<string>('MINIO_ACCESS_KEY', 'minioadmin'),
+          secretKey: this.configService.get<string>('MINIO_SECRET_KEY', 'minioadmin'),
+          bucket: this.configService.get<string>('MINIO_BUCKET', 'qba-bms-filestore'),
+        });
+        this.storage = new Storage(driver);
+      } else {
+        const rootPath = path.join(process.cwd(), 'uploads');
+        this.logger.log(`📁 Khởi tạo Storage Engine: Local Filesystem Driver (@bh10-d/storix) tại [${rootPath}]...`);
+        const driver = new LocalStorageDriver({
+          root: rootPath,
+        });
+        this.storage = new Storage(driver);
+      }
+    } catch (err) {
+      this.logger.warn(`Không thể nạp @bh10-d/storix: ${err.message}`);
     }
   }
 
