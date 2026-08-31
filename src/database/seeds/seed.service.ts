@@ -118,6 +118,23 @@ export class SeedService {
     this.logger.log('✅ Đã nạp hoàn tất toàn bộ Dữ Liệu Thực Odoo vào hệ thống NestJS Backend!');
   }
 
+  async seedUsersOnly() {
+    this.logger.log('🌱 Bắt đầu khởi tạo duy nhất Roles & Tài khoản Người dùng...');
+    const rolesMap = await this.seedRoles();
+    await this.seedUsers(rolesMap);
+    this.logger.log('✅ Khởi tạo thành công Roles & Tài khoản mẫu!');
+    return {
+      roles: Object.keys(rolesMap),
+      users: [
+        'superadmin@qbabms.com',
+        'admin@qbabms.com',
+        'manager@qbabms.com',
+        'staff@qbabms.com',
+        'user@qbabms.com',
+      ],
+    };
+  }
+
   private async seedRoles(): Promise<Record<string, Role>> {
     this.logger.log('--> Seeding Roles Table...');
     const defaultRoles = [
