@@ -220,27 +220,31 @@ export class PurchasesService {
     }
 
     // 2. Tự động phát sinh Hóa đơn Mua hàng / Hóa đơn phải trả (Vendor Bill - IN_INVOICE)
-    const invoiceItems = po.items.map((item) => ({
-      productName: item.productName,
-      productCode: item.productCode,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      amount: item.amount,
-    }));
+    try {
+      const invoiceItems = po.items.map((item) => ({
+        productName: item.productName,
+        productCode: item.productCode,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        amount: item.amount,
+      }));
 
-    await this.accountingService.createInvoice({
-      type: InvoiceType.IN_INVOICE,
-      partnerName: po.supplierName,
-      partnerTaxCode: po.supplierTaxCode,
-      partnerPhone: po.supplierPhone,
-      partnerAddress: po.supplierAddress,
-      subtotal: po.subtotal,
-      taxRate: po.taxRate,
-      taxAmount: po.taxAmount,
-      totalAmount: po.totalAmount,
-      notes: `Hóa đơn mua hàng tự động phát sinh từ Đơn mua [${po.poNumber}]`,
-      items: invoiceItems as any,
-    });
+      await this.accountingService.createInvoice({
+        type: InvoiceType.IN_INVOICE,
+        partnerName: po.supplierName,
+        partnerTaxCode: po.supplierTaxCode,
+        partnerPhone: po.supplierPhone,
+        partnerAddress: po.supplierAddress,
+        subtotal: po.subtotal,
+        taxRate: po.taxRate,
+        taxAmount: po.taxAmount,
+        totalAmount: po.totalAmount,
+        notes: `Hóa đơn mua hàng tự động phát sinh từ Đơn mua [${po.poNumber}]`,
+        items: invoiceItems as any,
+      });
+    } catch (err) {
+      this.logger.warn(`Không thể tạo Hóa đơn Vendor Bill cho đơn mua ${po.poNumber}: ${err.message}`);
+    }
 
     po.status = PurchaseStatus.CONFIRMED;
     po.dateApprove = new Date();

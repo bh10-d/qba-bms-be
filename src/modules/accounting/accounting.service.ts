@@ -74,13 +74,25 @@ export class AccountingService {
     return this.accountRepository.find({ order: { code: 'ASC' } });
   }
 
+  private async generateUniqueInvoiceNumber(type: InvoiceType): Promise<string> {
+    const prefix = type === InvoiceType.OUT_INVOICE ? 'INV' : 'BILL';
+    const year = new Date().getFullYear();
+    const count = await this.invoiceRepository.count({ where: { type } });
+    let seq = count + 1;
+    let candidate = `${prefix}-${year}-${String(seq).padStart(4, '0')}`;
+
+    while (await this.invoiceRepository.findOne({ where: { invoiceNumber: candidate } })) {
+      seq++;
+      candidate = `${prefix}-${year}-${String(seq).padStart(4, '0')}`;
+    }
+
+    return candidate;
+  }
+
   // 3. Tạo Hóa đơn Kế toán Mới (Customer Invoice hoặc Vendor Bill)
   async createInvoice(dto: CreateInvoiceDto): Promise<Invoice> {
     const type = dto.type || InvoiceType.OUT_INVOICE;
-    const prefix = type === InvoiceType.OUT_INVOICE ? 'INV' : 'BILL';
-    const year = new Date().getFullYear();
-    const count = await this.invoiceRepository.count();
-    const invoiceNumber = `${prefix}-${year}-${String(count + 1).padStart(4, '0')}`;
+    const invoiceNumber = (dto as any).invoiceNumber || (await this.generateUniqueInvoiceNumber(type));
 
     let subtotal = 0;
     const items = dto.items.map((itemDto) => {
