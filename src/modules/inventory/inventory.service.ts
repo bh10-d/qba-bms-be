@@ -74,11 +74,40 @@ export class InventoryService {
     return saved;
   }
 
-  async findAllStockMoves(): Promise<StockMove[]> {
-    return this.stockMoveRepository.find({
-      relations: ['product'],
-      order: { createdAt: 'DESC' },
-    });
+  async findAllStockMoves(query?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<{ data: StockMove[]; total: number; page: number; limit: number; totalPages: number }> {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query?.limit) || 10));
+    const skip = (page - 1) * limit;
+
+    const qb = this.stockMoveRepository
+      .createQueryBuilder('sm')
+      .leftJoinAndSelect('sm.product', 'product');
+
+    if (query?.search) {
+      const search = `%${query.search.trim()}%`;
+      qb.andWhere(
+        '(sm.reference ILIKE :search OR sm.note ILIKE :search OR product.name ILIKE :search OR product.defaultCode ILIKE :search)',
+        { search },
+      );
+    }
+
+    qb.orderBy('sm.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async getStockByProduct(productId: number): Promise<{ productId: number; productName: string; currentStock: number }> {
@@ -161,6 +190,62 @@ export class InventoryService {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async getInventoryValuationReport(): Promise<{
+    title: string;
+    totalStockCount: number;
+    totalValuationValue: number;
+    productsCount: number;
+    topValuedProducts: Array<{ id: number; name: string; defaultCode: string; stock: number; unitPrice: number; totalValue: number }>;
+  }> {
+    const products = await this.productRepository.find({
+      select: ['id', 'name', 'defaultCode', 'listPrice'],
+    });
+
+    const stockSums = await this.stockMoveRepository.manager
+      .createQueryBuilder()
+      .select('sm.product_id', 'productId')
+      .addSelect('SUM(sm.quantity)', 'totalStock')
+      .from('stock_moves', 'sm')
+      .groupBy('sm.product_id')
+      .getRawMany();
+
+    const stockMap: Record<number, number> = {};
+    let totalStockCount = 0;
+    for (const s of stockSums) {
+      if (s.productId) {
+        const qty = Number(s.totalStock) || 0;
+        stockMap[s.productId] = qty;
+        totalStockCount += qty;
+      }
+    }
+
+    let totalValuationValue = 0;
+    const valuationList = products.map((p) => {
+      const stock = stockMap[p.id] || 0;
+      const unitPrice = Number(p.listPrice) || 0;
+      const totalValue = stock * unitPrice;
+      totalValuationValue += totalValue;
+      return {
+        id: p.id,
+        name: p.name,
+        defaultCode: p.defaultCode,
+        stock,
+        unitPrice,
+        totalValue,
+      };
+    });
+
+    valuationList.sort((a, b) => b.totalValue - a.totalValue);
+
+    return {
+      title: 'Báo cáo Tổng hợp Giá trị Tài sản Tồn kho Real-time',
+      totalStockCount,
+      totalValuationValue,
+      productsCount: products.length,
+      topValuedProducts: valuationList.slice(0, 50),
     };
   }
 }

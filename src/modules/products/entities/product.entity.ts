@@ -32,6 +32,38 @@ export class Product {
   @Column({ type: 'text', nullable: true })
   labelImage: string;
 
+  @ApiProperty({ description: 'Giá bán niêm yết', example: 150000, nullable: true })
+  @Column({ name: 'list_price', type: 'numeric', precision: 15, scale: 2, default: 0 })
+  listPrice: number;
+
+  @ApiProperty({ description: 'Đơn vị tính', example: 'Cái', nullable: true })
+  @Column({ nullable: true, default: 'Cái' })
+  unit: string;
+
+  @ApiProperty({ description: 'Mã vạch Barcode', example: '893123456789', nullable: true })
+  @Column({ nullable: true })
+  barcode: string;
+
+  @ApiProperty({ description: 'Tên danh mục sản phẩm', example: 'Lọc gió - Lọc dầu', nullable: true })
+  @Column({ name: 'category_name', nullable: true })
+  categoryName: string;
+
+  @ApiProperty({ description: 'Mô tả chi tiết sản phẩm', nullable: true })
+  @Column({ type: 'text', nullable: true })
+  description: string;
+
+  @ApiProperty({ description: 'Trọng lượng (kg)', example: 1.5, nullable: true })
+  @Column({ type: 'numeric', precision: 10, scale: 3, default: 0 })
+  weight: number;
+
+  @ApiProperty({ description: 'Thể tích (m3)', example: 0.05, nullable: true })
+  @Column({ type: 'numeric', precision: 10, scale: 3, default: 0 })
+  volume: number;
+
+  @ApiProperty({ description: 'Vị trí lưu kho vật lý (Kệ/Dãy/Tầng)', example: 'A-12-03', nullable: true })
+  @Column({ name: 'location', nullable: true })
+  location: string;
+
   @ManyToOne(() => Brand, (brand) => brand.products, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'brand_id' })
   brand: Brand;
@@ -60,8 +92,19 @@ export class Product {
   })
   gearboxes: Gearbox[];
 
+  @ManyToMany(() => Product)
+  @JoinTable({
+    name: 'product_substitute_rel',
+    joinColumn: { name: 'product_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'substitute_id', referencedColumnName: 'id' },
+  })
+  substitutes: Product[];
+
   @OneToMany(() => ProductSupplierInfo, (supplierInfo) => supplierInfo.product)
   supplierInfos: ProductSupplierInfo[];
+
+  @OneToMany('ProductDocument', (document: any) => document.product)
+  documents: any[];
 
   @CreateDateColumn()
   createdAt: Date;

@@ -12,14 +12,23 @@ export class AuditLogsController {
 
   @Get()
   @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
-  @ApiOperation({ summary: 'Lấy danh sách nhật ký lịch sử theo Model & ID' })
-  @ApiQuery({ name: 'resModel', required: true, example: 'PurchaseOrder', description: 'Tên Model thực thể (PurchaseOrder, Order, Product, Brand)' })
-  @ApiQuery({ name: 'resId', required: true, example: 'P01455', description: 'Mã hoặc ID thực thể' })
-  findByEntity(
-    @Query('resModel') resModel: string,
-    @Query('resId') resId: string,
+  @ApiOperation({ summary: 'Lấy danh sách tất cả nhật ký lịch sử (Phân trang & Tìm kiếm)' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiQuery({ name: 'search', required: false, example: 'P01455' })
+  @ApiQuery({ name: 'resModel', required: false, example: 'PurchaseOrder' })
+  @ApiQuery({ name: 'resId', required: false, example: 'P01455' })
+  findAll(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('resModel') resModel?: string,
+    @Query('resId') resId?: string,
   ) {
-    return this.auditLogsService.findByEntity(resModel, resId);
+    if (!page && !limit && resModel && resId) {
+      return this.auditLogsService.findByEntity(resModel, resId);
+    }
+    return this.auditLogsService.findAll({ page, limit, search, resModel, resId });
   }
 
   @Get('purchase/:poNumber')

@@ -128,10 +128,48 @@ export class AccountingService {
   }
 
   // 4. Lấy danh sách Hóa đơn
-  async findAllInvoices(): Promise<Invoice[]> {
-    return this.invoiceRepository.find({
-      order: { createdAt: 'DESC' },
-    });
+  async findAllInvoices(query?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    type?: InvoiceType;
+    status?: InvoiceStatus;
+  }): Promise<{ data: Invoice[]; total: number; page: number; limit: number; totalPages: number }> {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query?.limit) || 10));
+    const skip = (page - 1) * limit;
+
+    const qb = this.invoiceRepository.createQueryBuilder('invoice');
+
+    if (query?.search) {
+      const search = `%${query.search.trim()}%`;
+      qb.andWhere(
+        '(invoice.invoiceNumber ILIKE :search OR invoice.partnerName ILIKE :search OR invoice.partnerPhone ILIKE :search)',
+        { search },
+      );
+    }
+
+    if (query?.type) {
+      qb.andWhere('invoice.type = :type', { type: query.type });
+    }
+
+    if (query?.status) {
+      qb.andWhere('invoice.status = :status', { status: query.status });
+    }
+
+    qb.orderBy('invoice.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   // 5. Tìm chi tiết Hóa đơn theo ID
@@ -202,19 +240,54 @@ export class AccountingService {
   }
 
   // 8. Lấy danh sách Phiếu Thu / Chi
-  async findAllPayments(): Promise<Payment[]> {
-    return this.paymentRepository.find({
-      relations: ['invoice'],
-      order: { createdAt: 'DESC' },
-    });
+  async findAllPayments(query?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<{ data: Payment[]; total: number; page: number; limit: number; totalPages: number }> {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query?.limit) || 10));
+    const skip = (page - 1) * limit;
+
+    const qb = this.paymentRepository.createQueryBuilder('p').leftJoinAndSelect('p.invoice', 'invoice');
+
+    if (query?.search) {
+      const search = `%${query.search.trim()}%`;
+      qb.andWhere('(p.paymentNumber ILIKE :search OR p.partnerName ILIKE :search OR p.notes ILIKE :search)', { search });
+    }
+
+    qb.orderBy('p.createdAt', 'DESC').skip(skip).take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  // 9. Lấy Sổ Bút toán Kế toán (Journal Entries)
-  async findAllJournalEntries(): Promise<JournalEntry[]> {
-    return this.journalEntryRepository.find({
-      relations: ['refInvoice'],
-      order: { createdAt: 'DESC' },
-    });
+  // 9. Lấy Sổ Bút toán Kế toán (Journal Entries - Nợ/Có kép)
+  async findAllJournalEntries(query?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<{ data: JournalEntry[]; total: number; page: number; limit: number; totalPages: number }> {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query?.limit) || 10));
+    const skip = (page - 1) * limit;
+
+    const qb = this.journalEntryRepository
+      .createQueryBuilder('je')
+      .leftJoinAndSelect('je.items', 'items')
+      .leftJoinAndSelect('je.refInvoice', 'refInvoice');
+
+    if (query?.search) {
+      const search = `%${query.search.trim()}%`;
+      qb.andWhere('(je.entryNumber ILIKE :search OR je.description ILIKE :search)', { search });
+    }
+
+    qb.orderBy('je.createdAt', 'DESC').skip(skip).take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   // --- PRIVATE HELPER: Tự động Định khoản Kế toán kép cho Hóa đơn ---

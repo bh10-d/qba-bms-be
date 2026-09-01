@@ -182,4 +182,22 @@ export class OrdersService {
     order.status = OrderStatus.CANCELLED;
     return this.orderRepository.save(order);
   }
+
+  async shipOrder(id: string): Promise<Order> {
+    const order = await this.findOne(id);
+    if (order.status === OrderStatus.CANCELLED) {
+      throw new BadRequestException(`Không thể xuất kho đơn bán hàng đã hủy!`);
+    }
+    order.status = OrderStatus.SHIPPED;
+    return this.orderRepository.save(order);
+  }
+
+  async completeOrder(id: string): Promise<Order> {
+    const order = await this.findOne(id);
+    if (order.status === OrderStatus.CANCELLED) {
+      throw new BadRequestException(`Không thể hoàn tất đơn bán hàng đã hủy!`);
+    }
+    order.status = OrderStatus.DONE;
+    return this.orderRepository.save(order);
+  }
 }

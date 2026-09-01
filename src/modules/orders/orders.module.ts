@@ -7,6 +7,7 @@ import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { InventoryModule } from '../inventory/inventory.module';
 import { AccountingModule } from '../accounting/accounting.module';
+import { PdfExporterService } from '../../common/pdf/pdf-exporter.service';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { AccountingModule } from '../accounting/accounting.module';
     AccountingModule,
   ],
   controllers: [OrdersController],
-  providers: [OrdersService],
-  exports: [OrdersService, TypeOrmModule],
+  providers: [OrdersService, PdfExporterService],
+  exports: [OrdersService, PdfExporterService, TypeOrmModule],
 })
 export class OrdersModule {}

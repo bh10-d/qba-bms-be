@@ -5,12 +5,14 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags, ApiQuery } from '@nestjs/swagger';
 import { AccountingService } from './accounting.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { InvoiceType, InvoiceStatus } from './entities/invoice.entity';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
 
@@ -43,9 +45,20 @@ export class AccountingController {
 
   @Get('invoices')
   @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
-  @ApiOperation({ summary: 'Lấy danh sách Hóa đơn' })
-  findAllInvoices() {
-    return this.accountingService.findAllInvoices();
+  @ApiOperation({ summary: 'Lấy danh sách Hóa đơn (Hỗ trợ Phân trang & Lọc)' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiQuery({ name: 'search', required: false, example: 'INV-2026' })
+  @ApiQuery({ name: 'type', required: false, enum: InvoiceType })
+  @ApiQuery({ name: 'status', required: false, enum: InvoiceStatus })
+  findAllInvoices(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('type') type?: InvoiceType,
+    @Query('status') status?: InvoiceStatus,
+  ) {
+    return this.accountingService.findAllInvoices({ page, limit, search, type, status });
   }
 
   @Get('invoices/:id')
@@ -71,9 +84,16 @@ export class AccountingController {
 
   @Get('payments')
   @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
-  @ApiOperation({ summary: 'Lấy danh sách Phiếu Thu / Chi' })
-  findAllPayments() {
-    return this.accountingService.findAllPayments();
+  @ApiOperation({ summary: 'Lấy danh sách Phiếu Thu / Chi (Hỗ trợ phân trang & tìm kiếm)' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiQuery({ name: 'search', required: false, example: 'PAY-2026' })
+  findAllPayments(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+  ) {
+    return this.accountingService.findAllPayments({ page, limit, search });
   }
 
   @Post('invoices/from-order/:orderId')
@@ -113,9 +133,16 @@ export class AccountingController {
 
   @Get('journal-entries')
   @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Xem Sổ Bút toán Kế toán (Journal Entries - Nợ/Có kép)' })
-  findAllJournalEntries() {
-    return this.accountingService.findAllJournalEntries();
+  @ApiOperation({ summary: 'Xem Sổ Bút toán Kế toán (Hỗ trợ phân trang & tìm kiếm)' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiQuery({ name: 'search', required: false, example: 'JV-2026' })
+  findAllJournalEntries(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+  ) {
+    return this.accountingService.findAllJournalEntries({ page, limit, search });
   }
 
   @Delete('invoices/:id')

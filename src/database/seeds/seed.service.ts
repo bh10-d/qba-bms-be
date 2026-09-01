@@ -13,6 +13,7 @@ import { Engine } from '../../modules/engines/entities/engine.entity';
 import { Gearbox } from '../../modules/gearboxes/entities/gearbox.entity';
 import { Vehicle } from '../../modules/vehicles/entities/vehicle.entity';
 import { Product } from '../../modules/products/entities/product.entity';
+import { ProductDocument } from '../../modules/products/entities/product-document.entity';
 import { ProductSupplierInfo } from '../../modules/supplier-info/entities/supplier-info.entity';
 import { Attachment } from '../../modules/attachments/entities/attachment.entity';
 import { Account, AccountType } from '../../modules/accounting/entities/account.entity';
@@ -49,6 +50,8 @@ export class SeedService {
     private readonly vehicleRepository: Repository<Vehicle>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
+    @InjectRepository(ProductDocument)
+    private readonly productDocumentRepository: Repository<ProductDocument>,
     @InjectRepository(ProductSupplierInfo)
     private readonly supplierInfoRepository: Repository<ProductSupplierInfo>,
     @InjectRepository(Attachment)
@@ -107,6 +110,8 @@ export class SeedService {
     const vehiclesMap = await this.seedRealVehicles(enginesMap, gearboxesMap);
     const productsMap = await this.seedRealProducts(brandsMap, vehiclesMap, enginesMap, gearboxesMap);
     await this.seedRealSupplierInfo(productsMap);
+    await this.seedProductSubstitutes(productsMap);
+    await this.seedProductDocuments(productsMap);
     await this.seedOdooAttachments(productsMap, brandsMap, vehiclesMap);
     await this.seedAccounts();
     await this.seedSampleInvoices();
@@ -388,22 +393,46 @@ export class SeedService {
 
     if (!fs.existsSync(dumpPath)) return productsMap;
 
-    // Pass 0: Parse qba_brand
+    // Pass 0: Parse qba_brand, uom_uom & product_category
     let fileStream = fs.createReadStream(dumpPath);
     let rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
     const brandsIdToName: Record<string, string> = {};
+    const uomMap: Record<string, string> = {};
+    const categMap: Record<string, string> = {};
     let mode: string | null = null;
 
     for await (const line of rl) {
       if (line.startsWith('COPY public.qba_brand (')) { mode = 'brand'; continue; }
-      if (mode === 'brand' && line.startsWith('\\.')) { mode = null; break; }
+      if (line.startsWith('COPY public.uom_uom (')) { mode = 'uom'; continue; }
+      if (line.startsWith('COPY public.product_category (')) { mode = 'categ'; continue; }
+      if (line.startsWith('\\.')) { mode = null; continue; }
 
       if (mode === 'brand') {
         const parts = line.split('\t');
         if (parts[0] && parts[3] && parts[3] !== '\\N') {
           brandsIdToName[parts[0]] = parts[3].trim();
         }
+      } else if (mode === 'uom') {
+        const parts = line.split('\t');
+        let name = parts[5];
+        if (name && name.startsWith('{')) {
+          try {
+            const obj = JSON.parse(name);
+            name = obj.vi_VN || obj.en_US || name;
+          } catch (e) {}
+        }
+        uomMap[parts[0]] = name || 'Cái';
+      } else if (mode === 'categ') {
+        const parts = line.split('\t');
+        let name = parts[5] || parts[4];
+        if (name && name.startsWith('{')) {
+          try {
+            const obj = JSON.parse(name);
+            name = obj.vi_VN || obj.en_US || name;
+          } catch (e) {}
+        }
+        categMap[parts[0]] = name;
       }
     }
 
@@ -411,7 +440,7 @@ export class SeedService {
     fileStream = fs.createReadStream(dumpPath);
     rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
-    const tmplMap: Record<string, { defaultCode: string | null; name: string; listPrice: number; brandName: string | null; brandSku: string | null }> = {};
+    const tmplMap: Record<string, { defaultCode: string | null; name: string; listPrice: number; brandName: string | null; brandSku: string | null; unit: string; categoryName: string | null; description: string | null; weight: number; volume: number }> = {};
     const tmplImgMap: Record<string, string> = {};
     mode = null;
 
@@ -436,13 +465,21 @@ export class SeedService {
           const brandId = parts[53];
           const brandSku = parts[54];
           const brandName = (brandId && brandId !== '\\N') ? (brandsIdToName[brandId] || null) : null;
+          const uomId = parts[3];
+          const categId = parts[2];
+          const desc = parts[15] !== '\\N' ? parts[15] : (parts[14] !== '\\N' ? parts[14] : (parts[13] !== '\\N' ? parts[13] : null));
 
           tmplMap[parts[0]] = {
             defaultCode: parts[11] !== '\\N' ? parts[11] : null,
             name: cleanName,
-            listPrice: Number(parts[17]) || Number(parts[14]) || 0,
+            listPrice: Number(parts[17]) || 0,
             brandName,
             brandSku: (brandSku && brandSku !== '\\N') ? brandSku.trim() : null,
+            unit: (uomId && uomMap[uomId]) || 'Cái',
+            categoryName: (categId && categMap[categId]) || null,
+            description: desc ? desc.replace(/\\n/g, '\n').trim() : null,
+            weight: Number(parts[19]) || 0,
+            volume: Number(parts[18]) || 0,
           };
         }
       } else if (mode === 'ir_attachment') {
@@ -467,7 +504,7 @@ export class SeedService {
     fileStream = fs.createReadStream(dumpPath);
     rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
-    const prodList: Array<{ code: string; name: string; price: number; imageUrl: string | null; brandName: string | null; brandSku: string | null }> = [];
+    const prodList: Array<{ code: string; name: string; price: number; imageUrl: string | null; brandName: string | null; brandSku: string | null; unit: string; barcode: string | null; categoryName: string | null; description: string | null; weight: number; volume: number }> = [];
     mode = null;
 
     for await (const line of rl) {
@@ -478,10 +515,27 @@ export class SeedService {
         const parts = line.split('\t');
         const prodId = parts[0];
         const tmplId = parts[1];
-        const tmpl = tmplMap[tmplId] || { defaultCode: null, name: 'Phụ Tùng', listPrice: 0, brandName: null, brandSku: null };
+        const tmpl = tmplMap[tmplId] || { defaultCode: null, name: 'Phụ Tùng', listPrice: 0, brandName: null, brandSku: null, unit: 'Cái', categoryName: null, description: null, weight: 0, volume: 0 };
         const code = (parts[4] && parts[4] !== '\\N') ? parts[4] : (tmpl.defaultCode || `PROD-#${prodId}`);
+        const barcode = (parts[5] && parts[5] !== '\\N') ? parts[5] : null;
+        const weight = Number(parts[9]) || tmpl.weight || 0;
+        const volume = Number(parts[8]) || tmpl.volume || 0;
         const imageUrl = tmplImgMap[tmplId] || null;
-        prodList.push({ code, name: tmpl.name, price: tmpl.listPrice, imageUrl, brandName: tmpl.brandName, brandSku: tmpl.brandSku });
+
+        prodList.push({
+          code,
+          name: tmpl.name,
+          price: tmpl.listPrice,
+          imageUrl,
+          brandName: tmpl.brandName,
+          brandSku: tmpl.brandSku,
+          unit: tmpl.unit,
+          barcode,
+          categoryName: tmpl.categoryName,
+          description: tmpl.description,
+          weight,
+          volume,
+        });
       }
     }
 
@@ -495,6 +549,13 @@ export class SeedService {
           brandSku: p.brandSku || p.code,
           imageUrl: p.imageUrl,
           brand: brandObj,
+          listPrice: p.price,
+          unit: p.unit,
+          barcode: p.barcode,
+          categoryName: p.categoryName,
+          description: p.description,
+          weight: p.weight,
+          volume: p.volume,
         });
         productsMap[p.code] = prod;
         prodEntities.push(prod);
@@ -785,7 +846,7 @@ export class SeedService {
           uom: i.uom || 'Cái',
           unitPrice: i.unitPrice,
           amount: i.amount,
-          product: i.product,
+          product: i.product ? ({ id: i.product.id } as any) : undefined,
         }),
       );
 
@@ -828,7 +889,7 @@ export class SeedService {
           unitPrice: i.unitPrice,
           discount: i.discount,
           amount: i.amount,
-          product: i.product,
+          product: i.product ? ({ id: i.product.id } as any) : undefined,
         }),
       );
 
@@ -1149,7 +1210,7 @@ export class SeedService {
           type,
           quantity: signedQty,
           note,
-          product: productObj,
+          product: productObj ? ({ id: productObj.id } as any) : undefined,
           createdAt,
         });
       }
@@ -1168,5 +1229,128 @@ export class SeedService {
     }
 
     this.logger.log(`  + ✅ Đã nạp hoàn tất toàn bộ ${moveEntities.length} Nhật ký Biến động Kho (stock_moves) Odoo thực (Đã liên kết 100% Sản phẩm)!`);
+  }
+
+  private async seedProductSubstitutes(productsMap: Record<string, Product>) {
+    this.logger.log('--> Seeding & Migrating product_optional_rel (Mã phụ tùng thay thế tương đương)...');
+    const dumpPath = this.getDumpPath();
+    if (!fs.existsSync(dumpPath)) return;
+
+    let fileStream = fs.createReadStream(dumpPath);
+    let rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+
+    const tmplToCode: Record<string, string> = {};
+    const rels: Array<{ srcTmpl: string; destTmpl: string }> = [];
+    let mode: string | null = null;
+
+    for await (const line of rl) {
+      if (line.startsWith('COPY public.product_template (')) { mode = 'template'; continue; }
+      if (line.startsWith('COPY public.product_optional_rel (')) { mode = 'optional'; continue; }
+      if (line.startsWith('\\.')) { mode = null; continue; }
+
+      if (mode === 'template') {
+        const parts = line.split('\t');
+        if (parts[0] && parts[11] && parts[11] !== '\\N') {
+          tmplToCode[parts[0]] = parts[11];
+        }
+      } else if (mode === 'optional') {
+        const parts = line.split('\t');
+        if (parts[0] && parts[1]) {
+          rels.push({ srcTmpl: parts[0], destTmpl: parts[1] });
+        }
+      }
+    }
+
+    let linkedCount = 0;
+    for (const rel of rels) {
+      const srcCode = tmplToCode[rel.srcTmpl];
+      const destCode = tmplToCode[rel.destTmpl];
+
+      if (srcCode && destCode && productsMap[srcCode] && productsMap[destCode]) {
+        const srcProd = productsMap[srcCode];
+        const destProd = productsMap[destCode];
+
+        if (!srcProd.substitutes) srcProd.substitutes = [];
+        if (!srcProd.substitutes.some((s) => s.id === destProd.id)) {
+          srcProd.substitutes.push(destProd);
+          await this.productRepository.save(srcProd);
+          linkedCount++;
+        }
+      }
+    }
+
+    this.logger.log(`  + ✅ Đã tạo thành công ${linkedCount} Liên kết mã phụ tùng thay thế tương đương!`);
+  }
+
+  private async seedProductDocuments(productsMap: Record<string, Product>) {
+    this.logger.log('--> Seeding & Migrating product_document & ir_attachment (Catalog & Bản vẽ PDF đính kèm)...');
+    const dumpPath = this.getDumpPath();
+    if (!fs.existsSync(dumpPath)) return;
+
+    let fileStream = fs.createReadStream(dumpPath);
+    let rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+
+    const tmplToCode: Record<string, string> = {};
+    const docAttachmentIds = new Set<string>();
+    const attachmentsMap: Record<string, { resId: string; fname: string; name: string; type: string }> = {};
+    let mode: string | null = null;
+
+    for await (const line of rl) {
+      if (line.startsWith('COPY public.product_template (')) { mode = 'template'; continue; }
+      if (line.startsWith('COPY public.product_document (')) { mode = 'doc'; continue; }
+      if (line.startsWith('COPY public.ir_attachment (')) { mode = 'attachment'; continue; }
+      if (line.startsWith('\\.')) { mode = null; continue; }
+
+      if (mode === 'template') {
+        const parts = line.split('\t');
+        if (parts[0] && parts[11] && parts[11] !== '\\N') {
+          tmplToCode[parts[0]] = parts[11];
+        }
+      } else if (mode === 'doc') {
+        const parts = line.split('\t');
+        if (parts[1]) {
+          docAttachmentIds.add(parts[1]); // ir_attachment_id
+        }
+      } else if (mode === 'attachment') {
+        const parts = line.split('\t');
+        const id = parts[0];
+        const resId = parts[1];
+        const name = parts[6];
+        const storeFname = parts[12];
+
+        if (id && storeFname && storeFname !== '\\N') {
+          const type = (name && name.endsWith('.pdf')) ? 'pdf' : ((name && name.match(/\.(png|jpg|jpeg)$/i)) ? 'image' : 'doc');
+          attachmentsMap[id] = { resId, fname: storeFname, name: name || 'Tài liệu Kỹ thuật', type };
+        }
+      }
+    }
+
+    const docEntities: ProductDocument[] = [];
+    for (const attId of docAttachmentIds) {
+      const att = attachmentsMap[attId];
+      if (att && att.resId) {
+        const code = tmplToCode[att.resId];
+        const matchedProd = code ? productsMap[code] : undefined;
+
+        if (matchedProd) {
+          const fileUrl = '/uploads/filestore/' + att.fname;
+          const doc = this.productDocumentRepository.create({
+            name: att.name || 'Bản vẽ Sơ đồ Kỹ thuật / Catalog PDF',
+            fileUrl,
+            fileType: att.type,
+            product: { id: matchedProd.id } as any,
+          });
+          docEntities.push(doc);
+        }
+      }
+    }
+
+    const chunkSize = 500;
+    for (let i = 0; i < docEntities.length; i += chunkSize) {
+      const chunk = docEntities.slice(i, i + chunkSize);
+      await this.productDocumentRepository.save(chunk);
+    }
+
+    this.logger.log(`  + ✅ Đã nạp thành công ${docEntities.length} File Catalog & Bản vẽ PDF kỹ thuật đính kèm chuẩn theo sản phẩm!`);
   }
 }

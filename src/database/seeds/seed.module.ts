@@ -13,6 +13,7 @@ import { Engine } from '../../modules/engines/entities/engine.entity';
 import { Gearbox } from '../../modules/gearboxes/entities/gearbox.entity';
 import { Vehicle } from '../../modules/vehicles/entities/vehicle.entity';
 import { Product } from '../../modules/products/entities/product.entity';
+import { ProductDocument } from '../../modules/products/entities/product-document.entity';
 import { ProductSupplierInfo } from '../../modules/supplier-info/entities/supplier-info.entity';
 import { Attachment } from '../../modules/attachments/entities/attachment.entity';
 import { Account } from '../../modules/accounting/entities/account.entity';
@@ -65,6 +66,7 @@ import { SeedController } from './seed.controller';
       Gearbox,
       Vehicle,
       Product,
+      ProductDocument,
       ProductSupplierInfo,
       Attachment,
       Account,

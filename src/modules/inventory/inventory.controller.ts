@@ -31,9 +31,16 @@ export class InventoryController {
 
   @Get('stock-moves')
   @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
-  @ApiOperation({ summary: 'Xem Nhật ký biến động kho (Audit Trail Nhập/Xuất/Điều chuyển)' })
-  findAllStockMoves() {
-    return this.inventoryService.findAllStockMoves();
+  @ApiOperation({ summary: 'Xem Nhật ký biến động kho (Hỗ trợ phân trang, tìm kiếm)' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiQuery({ name: 'search', required: false, description: 'Từ khóa tìm kiếm mã chứng từ, sản phẩm hoặc ghi chú' })
+  findAllStockMoves(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+  ) {
+    return this.inventoryService.findAllStockMoves({ page, limit, search });
   }
 
   @Get('product/:productId')
@@ -76,5 +83,12 @@ export class InventoryController {
   @ApiOperation({ summary: 'Lấy thông tin chi tiết Phiếu Nhập Kho theo Mã Phiếu (e.g. WH/IN/01499)' })
   findPickingByNumber(@Param('pickingNumber') pickingNumber: string) {
     return this.inventoryService.findPickingByNumber(pickingNumber);
+  }
+
+  @Get('valuation')
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Xem Báo cáo Tổng hợp Giá trị Tài sản Tồn kho Real-time' })
+  getValuationReport() {
+    return this.inventoryService.getInventoryValuationReport();
   }
 }

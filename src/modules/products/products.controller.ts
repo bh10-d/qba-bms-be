@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -22,10 +22,19 @@ export class ProductsController {
 
   @Get()
   @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF)
-  @ApiOperation({ summary: 'Lấy danh sách tất cả sản phẩm' })
-  @ApiResponse({ status: 200, description: 'Danh sách sản phẩm được trả về thành công.' })
-  findAll() {
-    return this.productsService.findAll();
+  @ApiOperation({ summary: 'Lấy danh sách sản phẩm (Hỗ trợ Phân trang & Tìm kiếm)' })
+  @ApiQuery({ name: 'page', required: false, example: 1, description: 'Trang cần lấy (Mặc định: 1)' })
+  @ApiQuery({ name: 'limit', required: false, example: 10, description: 'Số bản ghi / trang (Mặc định: 10)' })
+  @ApiQuery({ name: 'search', required: false, example: 'HOWO', description: 'Từ khóa tìm kiếm theo Tên, SKU, Barcode, Mã OEM' })
+  @ApiQuery({ name: 'brandId', required: false, example: 1, description: 'Lọc theo ID Thương hiệu' })
+  @ApiResponse({ status: 200, description: 'Danh sách sản phẩm phân trang được trả về thành công.' })
+  findAll(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('brandId') brandId?: number,
+  ) {
+    return this.productsService.findAll({ page, limit, search, brandId });
   }
 
   @Get(':id')
